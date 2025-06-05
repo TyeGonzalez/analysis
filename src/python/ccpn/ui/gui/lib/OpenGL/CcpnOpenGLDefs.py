@@ -178,6 +178,8 @@ GLSCALINGBYUNITS = 'Scaling By Units'
 GLSCALINGAXIS = 'Scaling Axis'
 GLPRINTFONT = 'Print Font'
 GLUSEPRINTFONT = 'Use Print Font'
+# axis tick density
+GLTICKDENSITY = 'Tick Density'
 # NOTE:ED - add tick marks?
 
 AXISDRAWOFFSET = 0.001

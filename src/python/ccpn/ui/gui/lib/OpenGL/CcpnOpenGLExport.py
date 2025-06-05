@@ -75,7 +75,7 @@ from ccpn.ui.gui.lib.OpenGL.CcpnOpenGLDefs import (GLGRIDLINES, GLAXISLABELS, GL
                                                    GLSPECTRUMDISPLAY, GLBACKGROUND, GLBASETHICKNESS, GLSYMBOLTHICKNESS,
                                                    GLCONTOURTHICKNESS, GLFOREGROUND, GLSHOWSPECTRAONPHASE,
                                                    GLAXISTITLES, GLAXISUNITS, GLSTRIPDIRECTION, GLSTRIPPADDING,
-                                                   GLEXPORTDPI, GLCURSORS, GLDIAGONALLINE, GLDIAGONALSIDEBANDS,
+                                                   GLTICKDENSITY, GLEXPORTDPI, GLCURSORS, GLDIAGONALLINE, GLDIAGONALSIDEBANDS,
                                                    MAINVIEW, MAINVIEWFULLHEIGHT, MAINVIEWFULLWIDTH, RIGHTAXIS,
                                                    RIGHTAXISBAR, FULLRIGHTAXIS, FULLRIGHTAXISBAR, BOTTOMAXIS,
                                                    BOTTOMAXISBAR, FULLBOTTOMAXIS, FULLBOTTOMAXISBAR, FULLVIEW,
@@ -733,6 +733,9 @@ class GLExporter():
         self._oldValues = (self.strip._CcpnGLWidget.axisL, self.strip._CcpnGLWidget.axisR,
                            self.strip._CcpnGLWidget.axisT, self.strip._CcpnGLWidget.axisB)
         self._oldSize = (self.strip._CcpnGLWidget.w, self.strip._CcpnGLWidget.h)
+        # update tick density for export
+        self._oldTickDensity = getattr(self.strip._CcpnGLWidget, 'tickDensity', 1.0)
+        self.strip._CcpnGLWidget.tickDensity = self.params.get(GLTICKDENSITY, 1.0)
         try:
             self._updateAxes = False
             _dd = self.params[GLSTRIPREGIONS][self.strip.id]
@@ -886,10 +889,12 @@ class GLExporter():
                 # reset the strip to the original values
                 self.strip._CcpnGLWidget.axisL, self.strip._CcpnGLWidget.axisR, self.strip._CcpnGLWidget.axisT, self.strip._CcpnGLWidget.axisB = self._oldValues
                 self.strip._CcpnGLWidget.w, self.strip._CcpnGLWidget.h = self._oldSize
+            # reset tick density
+            self.strip._CcpnGLWidget.tickDensity = self._oldTickDensity
 
-                self.strip._CcpnGLWidget._rescaleAllZoom()
-                self.strip._CcpnGLWidget._buildGL()
-                self.strip._CcpnGLWidget.buildAxisLabels()
+            self.strip._CcpnGLWidget._rescaleAllZoom()
+            self.strip._CcpnGLWidget._buildGL()
+            self.strip._CcpnGLWidget.buildAxisLabels()
         except Exception:
             getLogger().debug('There was an issue resetting the strip')
 
@@ -900,6 +905,7 @@ class GLExporter():
                     # reset the strip to the original values
                     sdr = self.strip.spectrumDisplay._rightGLAxis
                     sdr.axisL, sdr.axisR, sdr.axisT, sdr.axisB = self._oldValues
+                    sdr.tickDensity = self._oldTickDensity
                     sdr._rescaleAllZoom()
                     sdr._buildGL()
                     sdr.buildAxisLabels(refresh=True)
@@ -907,6 +913,7 @@ class GLExporter():
                 # reset the strip to the original values
                 sdb = self.strip.spectrumDisplay._bottomGLAxis
                 sdb.axisL, sdb.axisR, sdb.axisT, sdb.axisB = self._oldValues
+                sdb.tickDensity = self._oldTickDensity
                 sdb._rescaleAllZoom()
                 sdb._buildGL()
                 sdb.buildAxisLabels(refresh=True)

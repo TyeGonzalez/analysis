@@ -468,6 +468,8 @@ class CcpnGLWidget(QOpenGLWidget):
         self._multipletSymbolsEnabled = True
         self._multipletLabelsEnabled = True
         self._multipletArrowsEnabled = True
+        # density multiplier for axis tick marks
+        self._tickDensity = 1.0
         self._arrowType = 0
         self._arrowSize = 0
         self._arrowMinimum = 0
@@ -4245,6 +4247,18 @@ class CcpnGLWidget(QOpenGLWidget):
         self._rescaleAllAxes()
 
     @property
+    def tickDensity(self) -> float:
+        """Density multiplier for axis tick marks"""
+        return self._tickDensity
+
+    @tickDensity.setter
+    def tickDensity(self, value: float):
+        try:
+            self._tickDensity = max(0.1, float(value))
+        except Exception:
+            self._tickDensity = 1.0
+
+    @property
     def orderedAxes(self):
         return self._orderedAxes
 
@@ -5225,7 +5239,7 @@ class CcpnGLWidget(QOpenGLWidget):
                         # skip if one of the axes is zero
                         continue
 
-                    nlTarget = 10.**i  # i: 0 -> major tick-marks, 1 -> minor, (2 -> tiny-minor :) if needed)
+                    nlTarget = self.tickDensity * (10.**i)  # density adjusted
                     _pow = np.log10(abs(dist / nlTarget)) + 0.5
                     d = 10.**np.floor(_pow)
                     if 0 in d:

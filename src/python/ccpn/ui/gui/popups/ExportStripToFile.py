@@ -33,6 +33,8 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from dataclasses import dataclass
 from functools import partial
 from typing import Optional
+import tempfile
+from pathlib import Path
 
 from ccpn.core.lib.ContextManagers import catchExceptions, queueStateChange
 from ccpn.core.lib.WeakRefLib import WeakRefDescriptor
@@ -74,7 +76,8 @@ from ccpn.ui.gui.lib.OpenGL.CcpnOpenGLDefs import (GLFILENAME, GLGRIDLINES,
                                                    GLPRINTFONT, GLUSEPRINTFONT, GLSCALINGAXIS,
                                                    GLPEAKSYMBOLSENABLED, GLPEAKLABELSENABLED, GLPEAKARROWSENABLED,
                                                    GLMULTIPLETSYMBOLSENABLED,
-                                                   GLMULTIPLETLABELSENABLED, GLMULTIPLETARROWSENABLED)
+                                                   GLMULTIPLETLABELSENABLED, GLMULTIPLETARROWSENABLED,
+                                                   GLTICKDENSITY)
 from ccpn.ui.gui.lib.ChangeStateHandler import changeState
 from ccpn.util.Colour import (spectrumColours, addNewColour, fillColourPulldown, addNewColourString, hexToRgbRatio,
                               colourNameNoSpace)
@@ -462,6 +465,13 @@ class ExportStripToFilePopup(ExportDialogABC):
                                                             )
 
         row += 1
+        self.tickDensityBox = DoubleSpinBoxCompoundWidget(sFrame, grid=(row, 0), gridSpan=(1, 3), hAlign='left',
+                                                          labelText='Tick Density',
+                                                          decimals=2, step=0.1, minimum=0.1, maximum=5.0,
+                                                          callback=self._queueTickDensityCallback,
+                                                          )
+
+        row += 1
         self.stripPaddingBox = DoubleSpinBoxCompoundWidget(sFrame, grid=(row, 0), gridSpan=(1, 3), hAlign='left',
                                                            labelText='Strip Padding',
                                                            # value=5,
@@ -493,6 +503,11 @@ class ExportStripToFilePopup(ExportDialogABC):
 
         # widgets for handling fonts
         self._setupFontWidget(row, sFrame)
+        row += 1
+
+        self.previewLabel = Label(sFrame, grid=(row, 0), gridSpan=(1, 4), hAlign='centre')
+        self.previewLabel.setMinimumHeight(150)
+
         row += 1
 
         self.treeView = PrintTreeCheckBoxes(sFrame, project=None, grid=(row, 0), gridSpan=(1, 4))
@@ -1111,6 +1126,7 @@ class ExportStripToFilePopup(ExportDialogABC):
         self.backgroundColourBox.setCurrentText(spectrumColours[self.backgroundColour])
 
         self.baseThicknessBox.setValue(self.printSettings.baseThickness)
+        self.tickDensityBox.setValue(getattr(self.printSettings, 'tickDensity', 1.0))
         self.stripPaddingBox.setValue(self.printSettings.stripPadding)
         self.exportDpiBox.setValue(self.printSettings.dpi)
 
@@ -1625,6 +1641,7 @@ class ExportStripToFilePopup(ExportDialogABC):
                       GLFOREGROUND             : hexToRgbRatio(self.foregroundColour),
                       GLBACKGROUND             : hexToRgbRatio(self.backgroundColour),
                       GLBASETHICKNESS          : self.baseThicknessBox.getValue(),
+                      GLTICKDENSITY            : self.tickDensityBox.getValue(),
                       # unique per spectrumDisplay - may differ from preferences
                       GLSYMBOLTHICKNESS        : strip.symbolThickness,
                       GLCONTOURTHICKNESS       : strip.contourThickness,
@@ -1708,6 +1725,7 @@ class ExportStripToFilePopup(ExportDialogABC):
             # stop the popup from firing events
             super()._postInit()
         self._revertButton = self.getButton(self.RESETBUTTON)
+        self._schedulePreview()
 
     def _closeDialog(self):
         self._applyChanges()
@@ -1959,16 +1977,58 @@ class ExportStripToFilePopup(ExportDialogABC):
         textFromValue = self.baseThicknessBox.textFromValue
         oldValue = textFromValue(self.printSettings.baseThickness or 0.0)
         if _value >= 0 and textFromValue(_value) != oldValue:
+            self._schedulePreview()
             return partial(self._setBaseThickness, _value)
 
     def _setBaseThickness(self, value):
         self.printSettings.baseThickness = float(value)
 
     @queueStateChange(_verifyPopupApply)
+    def _queueTickDensityCallback(self, _value):
+        textFromValue = self.tickDensityBox.textFromValue
+        oldValue = textFromValue(getattr(self.printSettings, 'tickDensity', 1.0))
+        if _value >= 0 and textFromValue(_value) != oldValue:
+            self._schedulePreview()
+            return partial(self._setTickDensity, _value)
+
+    def _setTickDensity(self, value):
+        self.printSettings.tickDensity = float(value)
+
+    def _schedulePreview(self):
+        if not hasattr(self, '_previewTimer'):
+            self._previewTimer = QtCore.QTimer()
+            self._previewTimer.setSingleShot(True)
+            self._previewTimer.timeout.connect(self._generatePreview)
+        self._previewTimer.start(500)
+
+    def _generatePreview(self):
+        try:
+            params = self.buildParameters()
+            if not params:
+                return
+            if not (glWidgetRef := params.get(GLWIDGET)):
+                return
+            glWidget = glWidgetRef()
+            if not glWidget:
+                return
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tf:
+                params[GLFILENAME] = tf.name
+                if pngExp := glWidget.exportToPNG(tf.name, params):
+                    pngExp.writePNGFile()
+                    pngExp.clear()
+                pix = QtGui.QPixmap(tf.name)
+            self.previewLabel.setPixmap(pix.scaled(self.previewLabel.size(), QtCore.Qt.KeepAspectRatio,
+                                                   QtCore.Qt.SmoothTransformation))
+            Path(tf.name).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    @queueStateChange(_verifyPopupApply)
     def _queueStripPaddingCallback(self, _value):
         textFromValue = self.stripPaddingBox.textFromValue
         oldValue = textFromValue(self.printSettings.stripPadding or 0.0)
         if _value >= 0 and textFromValue(_value) != oldValue:
+            self._schedulePreview()
             return partial(self._setStripPadding, _value)
 
     def _setStripPadding(self, value):
