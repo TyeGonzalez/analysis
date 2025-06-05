@@ -191,6 +191,7 @@
         "backgroundColour"  : "#FFFFFF",
         "baseThickness"     : 1.0,
         "stripPadding"      : 5,
+        "tickDensity"       : 1.0,
         "dpi"               : 300,
         "scalingMode"       : "Percentage",
         "scalingPercentage" : 80,
